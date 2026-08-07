@@ -36,16 +36,21 @@ This guide provides step-by-step instructions for deploying AttendX AI into a pr
    - **Framework Preset:** Vite
    - **Build Command:** \`npm run build\`
    - **Output Directory:** \`dist\`
-4. Configure **vercel.json** (Ensure this file is in your root directory to proxy API requests):
+4. Configure **vercel.json** (Ensure this file is in your root directory to proxy API requests and handle SPA routing):
    \`\`\`json
    {
+     "$schema": "https://openapi.vercel.sh/vercel.json",
+     "buildCommand": "npm run build",
+     "outputDirectory": "dist",
+     "framework": "vite",
+     "cleanUrls": true,
      "rewrites": [
        {
-         "source": "/api/(.*)",
-         "destination": "https://your-render-backend-url.onrender.com/api/$1"
+         "source": "/api/:path*",
+         "destination": "https://your-render-backend-url.onrender.com/api/:path*"
        },
        {
-         "source": "/(.*)",
+         "source": "/((?!api/|assets/|.*\\..*).*)",
          "destination": "/index.html"
        }
      ]
