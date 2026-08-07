@@ -24,7 +24,7 @@ export default function AuthCallback() {
           return;
         }
 
-        // 1. Check for PKCE authorization code in query string
+        // 1. Handle code in URL if PKCE flow
         const searchParams = new URLSearchParams(window.location.search);
         const code = searchParams.get('code');
         const errorDescription = searchParams.get('error_description') || searchParams.get('error');
@@ -35,28 +35,15 @@ export default function AuthCallback() {
         }
 
         if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            console.error("PKCE Code exchange error:", error.message);
-            if (mounted) setErrorMsg(error.message);
-            return;
-          }
-
-          if (data.session) {
-            if (data.session.access_token) {
-              localStorage.setItem('attendx_jwt_token', data.session.access_token);
-            }
-            await refreshUserData();
-            if (mounted) {
-              navigate('/dashboard', { replace: true });
-            }
-            return;
+          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeErr) {
+            console.warn("Notice during code exchange:", exchangeErr.message);
           }
         }
 
-        // 2. Check for hash implicit flow or existing session
+        // 2. Call await supabase.auth.getSession()
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error("Auth callback getSession error:", sessionError.message);
           if (mounted) setErrorMsg(sessionError.message);
@@ -68,8 +55,35 @@ export default function AuthCallback() {
             localStorage.setItem('attendx_jwt_token', session.access_token);
           }
           await refreshUserData();
+
+          // Determine role for redirection
+          const emailLower = session.user.email?.toLowerCase() || '';
+          let role = 'student';
+
+          if (emailLower === 'nitesh933438@gmail.com') {
+            role = 'admin';
+          } else {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            if (profile?.role) {
+              role = profile.role;
+            } else if (session.user.user_metadata?.role) {
+              role = session.user.user_metadata.role;
+            }
+          }
+
           if (mounted) {
-            navigate('/dashboard', { replace: true });
+            if (role === 'admin') {
+              navigate('/admin', { replace: true });
+            } else if (role === 'teacher') {
+              navigate('/teacher', { replace: true });
+            } else {
+              navigate('/student', { replace: true });
+            }
           }
           return;
         }
@@ -81,19 +95,45 @@ export default function AuthCallback() {
               localStorage.setItem('attendx_jwt_token', currentSession.access_token);
             }
             await refreshUserData();
+
+            const emailLower = currentSession.user.email?.toLowerCase() || '';
+            let role = 'student';
+            if (emailLower === 'nitesh933438@gmail.com') {
+              role = 'admin';
+            } else {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentSession.user.id)
+                .maybeSingle();
+
+              if (profile?.role) {
+                role = profile.role;
+              } else if (currentSession.user.user_metadata?.role) {
+                role = currentSession.user.user_metadata.role;
+              }
+            }
+
             if (mounted) {
-              navigate('/dashboard', { replace: true });
+              if (role === 'admin') {
+                navigate('/admin', { replace: true });
+              } else if (role === 'teacher') {
+                navigate('/teacher', { replace: true });
+              } else {
+                navigate('/student', { replace: true });
+              }
             }
           }
         });
         subscription = authRes.data.subscription;
 
-        // Timeout fallback if no session within 7 seconds
+        // 4. Fallback timeout: if no session exists, redirect to /login
         timer = setTimeout(() => {
           if (mounted) {
-            setErrorMsg("Authentication process timed out. Please verify your Supabase OAuth settings and try again.");
+            navigate('/login', { replace: true });
           }
-        }, 7000);
+        }, 5000);
+
       } catch (err: any) {
         if (mounted) setErrorMsg(err?.message || "An unexpected error occurred during Google authentication.");
       }
@@ -136,7 +176,7 @@ export default function AuthCallback() {
             <p className="text-xs text-slate-400 mb-6">Exchanging authorization token & syncing profile...</p>
             <div className="flex items-center justify-center gap-2 text-indigo-400 text-xs font-semibold">
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Redirecting to AttendX Dashboard</span>
+              <span>Authenticating Session...</span>
             </div>
           </>
         )}

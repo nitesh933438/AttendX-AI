@@ -8,6 +8,8 @@ import AppLayout from "./components/layout/AppLayout";
 
 // Lazy-loaded routes for Production Optimization
 const Login = lazy(() => import("./pages/Login"));
+const SignUp = lazy(() => import("./pages/SignUp"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -41,7 +43,11 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: ReactNode, allow
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/forbidden" replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (user.role === 'student') return <Navigate to="/student" replace />;
+    if (user.role === 'teacher') return <Navigate to="/teacher" replace />;
+    return <Navigate to="/forbidden" replace />;
+  }
   
   return <>{children}</>;
 };
@@ -64,10 +70,25 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/login" element={<Login />} />
+                  <Route path="/signup" element={<SignUp />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
                   <Route path="/reset-password" element={<ResetPassword />} />
                   <Route path="/forbidden" element={<Forbidden />} />
                   <Route path="/server-error" element={<ServerError />} />
+
+                  {/* Role Specific Dashboards */}
+                  <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AppLayout /></ProtectedRoute>}>
+                    <Route index element={<Dashboard />} />
+                  </Route>
+
+                  <Route path="/teacher" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AppLayout /></ProtectedRoute>}>
+                    <Route index element={<Dashboard />} />
+                  </Route>
+
+                  <Route path="/student" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'student']}><AppLayout /></ProtectedRoute>}>
+                    <Route index element={<Dashboard />} />
+                  </Route>
                   
                   <Route path="/dashboard" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                     <Route index element={<Dashboard />} />
