@@ -42,17 +42,7 @@ export async function authenticateJWT(req: AuthenticatedRequest, res: Response, 
 
   try {
     if (!supabaseAdmin) {
-      // Development mode check if Supabase service keys are not configured
-      if (process.env.NODE_ENV !== 'production' && token.startsWith('demo-')) {
-        req.user = {
-          id: 'usr-demo-1',
-          email: token.includes('admin') || token.includes('nitesh') ? 'nitesh933438@gmail.com' : 'student@attendx.edu',
-          role: token.includes('admin') || token.includes('nitesh') ? 'admin' : 'student',
-          full_name: 'Demo User'
-        };
-        return next();
-      }
-      return res.status(500).json({ error: 'Authentication service unavailable: Supabase credentials missing' });
+      return res.status(500).json({ error: 'Authentication service unavailable: Supabase credentials missing in backend environment.' });
     }
 
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);

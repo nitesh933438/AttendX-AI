@@ -8,6 +8,7 @@ import { UserPlus, Eye, EyeOff, Sparkles, Loader2, ArrowLeft, CheckCircle2, Shie
 export default function SignUp() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -74,7 +75,7 @@ export default function SignUp() {
 
     setSubmitting(true);
     try {
-      const res = await register({ email: email.trim(), password, name: fullName.trim() });
+      const res = await register({ email: email.trim(), password, name: fullName.trim(), role });
       if (res.success) {
         if (res.requiresVerification) {
           addToast('info', 'Verification Email Sent', res.message || 'Please check your inbox to verify your email before logging in.');
@@ -119,6 +120,27 @@ export default function SignUp() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Account Role Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1.5">I am registering as</label>
+            <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setRole('student')}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all ${role === 'student' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                onClick={() => setRole('teacher')}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all ${role === 'teacher' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Teacher
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
             <input

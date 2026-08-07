@@ -211,7 +211,7 @@ async function startServer() {
 
   // Admin-Only: Create Teacher Account
   app.post("/api/admin/teachers", authenticateJWT, authorizeRoles("admin"), async (req: AuthenticatedRequest, res) => {
-    const { email, name, department, employeeId } = req.body;
+    const { email, name, department, employeeId, password } = req.body;
 
     if (!email || !name) {
       return res.status(400).json({ error: "Email and Full Name are required to create a Teacher account." });
@@ -222,6 +222,7 @@ async function startServer() {
       const cleanName = name.trim();
       const firstName = cleanName.split(" ")[0];
       const lastName = cleanName.split(" ").slice(1).join(" ") || "";
+      const teacherPassword = password || `Teacher@${Math.floor(100000 + Math.random() * 900000)}`;
 
       let createdAuthId = `auth-tch-${Date.now()}`;
 
@@ -229,7 +230,7 @@ async function startServer() {
         // Create user in Supabase Auth via Admin API
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
           email: emailLower,
-          password: "TeacherPassword123!",
+          password: teacherPassword,
           email_confirm: true,
           user_metadata: {
             full_name: cleanName,
@@ -283,7 +284,7 @@ async function startServer() {
 
       res.status(201).json({
         success: true,
-        message: `Teacher account created successfully for ${cleanName} (${emailLower}). Default password: TeacherPassword123!`,
+        message: `Teacher account created successfully for ${cleanName} (${emailLower}). Password: ${teacherPassword}`,
         teacher: newTeacherRecord
       });
     } catch (err: any) {

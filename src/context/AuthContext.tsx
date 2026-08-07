@@ -25,7 +25,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password?: string, rememberMe?: boolean) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
-  register: (payload: { email: string; password?: string; name?: string }) => Promise<{ success: boolean; requiresVerification?: boolean; message?: string; error?: string }>;
+  register: (payload: { email: string; password?: string; name?: string; role?: 'student' | 'teacher' }) => Promise<{ success: boolean; requiresVerification?: boolean; message?: string; error?: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetPassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   changePassword: (
@@ -290,7 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * User Registration (Sign Up)
    * Automatically sets Admin role if nitesh933438@gmail.com, otherwise defaults to Student.
    */
-  const register = async (payload: { email: string; password?: string; name?: string }): Promise<{ success: boolean; requiresVerification?: boolean; message?: string; error?: string }> => {
+  const register = async (payload: { email: string; password?: string; name?: string; role?: 'student' | 'teacher' }): Promise<{ success: boolean; requiresVerification?: boolean; message?: string; error?: string }> => {
     setLoading(true);
     try {
       if (!payload.email || !payload.password) {
@@ -302,8 +302,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const firstName = cleanName.split(' ')[0];
       const lastName = cleanName.split(' ').slice(1).join(' ') || '';
 
-      // Determine initial role: nitesh933438@gmail.com -> admin, else student
-      const initialRole = emailLower === 'nitesh933438@gmail.com' ? 'admin' : 'student';
+      // Primary admin account gets admin, otherwise use requested role (student/teacher), default student
+      let initialRole: 'admin' | 'teacher' | 'student' = 'student';
+      if (emailLower === 'nitesh933438@gmail.com') {
+        initialRole = 'admin';
+      } else if (payload.role === 'teacher') {
+        initialRole = 'teacher';
+      } else {
+        initialRole = 'student';
+      }
 
       const { data, error } = await supabase.auth.signUp({
         email: emailLower,
