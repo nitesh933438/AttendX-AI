@@ -15,5 +15,9 @@ export const supabase = hasSupabaseKeys
         storageKey: 'attendx-supabase-auth-token',
       }
     })
-  : createClient('https://dummy.supabase.co', 'dummy-key');
+  : new Proxy({} as any, {
+      get: () => {
+        throw new Error("Supabase Environment Variables (VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY) are missing. Please configure them in Vercel.");
+      }
+    });
 
