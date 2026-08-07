@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { LogIn, UserPlus, KeyRound, ShieldCheck, ArrowLeft, Loader2, Sparkles, UserCheck, GraduationCap, Shield } from 'lucide-react';
 import { hasSupabaseKeys } from '../lib/supabase';
 

@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-export const supabaseUrlRaw = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '') || '';
-export const supabaseUrl = supabaseUrlRaw.replace(/\/rest\/v1\/?$/, '');
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '') || '';
 export const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : '') || '';
 
 export const hasSupabaseKeys = Boolean(supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('dummy'));
@@ -13,11 +12,12 @@ export const supabase = hasSupabaseKeys
         autoRefreshToken: true,
         detectSessionInUrl: true,
         storageKey: 'attendx-supabase-auth-token',
-      }
+      },
+      global: {
+        headers: {
+          apikey: supabaseAnonKey,
+        },
+      },
     })
-  : new Proxy({} as any, {
-      get: () => {
-        throw new Error("Supabase Environment Variables (VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY) are missing. Please configure them in Vercel.");
-      }
-    });
+  : createClient('https://dummy.supabase.co', 'dummy-key');
 
