@@ -292,6 +292,60 @@ async function startServer() {
     }
   });
 
+  // Admin-Only: Fetch All Users & Profiles
+  app.get("/api/admin/users", authenticateJWT, authorizeRoles("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.json({ users: [] });
+      }
+
+      const { data: profiles, error } = await supabaseAdmin
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+
+      res.json({ users: profiles || [] });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to fetch users" });
+    }
+  });
+
+  // Admin-Only: Change User Role
+  app.put("/api/admin/users/:userId/role", authenticateJWT, authorizeRoles("admin"), async (req: AuthenticatedRequest, res) => {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!role || !["admin", "teacher", "student"].includes(role)) {
+      return res.status(400).json({ error: "Invalid role specified. Allowed roles: 'admin', 'teacher', 'student'." });
+    }
+
+    try {
+      if (supabaseAdmin) {
+        const { error: updateErr } = await supabaseAdmin
+          .from("profiles")
+          .update({ role, updated_at: new Date().toISOString() })
+          .eq("id", userId);
+
+        if (updateErr) {
+          return res.status(500).json({ error: updateErr.message });
+        }
+
+        // Also sync metadata in Supabase Auth
+        await supabaseAdmin.auth.admin.updateUserById(userId, {
+          user_metadata: { role }
+        }).catch(() => {});
+      }
+
+      res.json({ success: true, message: `User role updated to '${role}' successfully.` });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to update user role" });
+    }
+  });
+
   // ----------------------------------------------------
   // FACE REGISTRATION & BIOMETRICS APIs
   // ----------------------------------------------------

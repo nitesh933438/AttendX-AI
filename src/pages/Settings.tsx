@@ -1,4 +1,4 @@
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { motion } from "motion/react";
 import { 
   User, 
@@ -20,18 +20,70 @@ import {
   Trash2,
   Database,
   RefreshCw,
-  Globe
+  Globe,
+  Users,
+  Search,
+  UserCheck,
+  GraduationCap
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
+import { supabase } from "../lib/supabase";
 
 export default function Settings() {
-  const { user, updateProfile, changePassword, logout } = useAuth();
+  const { user, updateProfile, updateUserRole, changePassword, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'appearance' | 'ai' | 'camera' | 'notifications' | 'privacy' | 'account'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'security' | 'appearance' | 'ai' | 'camera' | 'notifications' | 'privacy' | 'account'>('profile');
+
+  // User Role Management State for Admin
+  const [userProfiles, setUserProfiles] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+
+  const fetchUserProfiles = async () => {
+    if (user?.role !== 'admin') return;
+    setLoadingUsers(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (data && data.length > 0) {
+        setUserProfiles(data);
+      } else {
+        const token = localStorage.getItem('attendx_jwt_token');
+        const res = await fetch('/api/admin/users', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (json.users) setUserProfiles(json.users);
+      }
+    } catch (e) {
+      console.error("Failed to load user profiles:", e);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users' && user?.role === 'admin') {
+      fetchUserProfiles();
+    }
+  }, [activeTab, user?.role]);
+
+  const handleRoleChange = async (targetUserId: string, targetEmail: string, newRole: 'admin' | 'teacher' | 'student') => {
+    const res = await updateUserRole(targetUserId, newRole);
+    if (res.success) {
+      showToast("Role Updated", `Role for ${targetEmail} updated to ${newRole.toUpperCase()}.`, "success");
+      setUserProfiles(prev => prev.map(u => u.id === targetUserId ? { ...u, role: newRole } : u));
+    } else {
+      showToast("Error", res.error || "Failed to update user role", "error");
+    }
+  };
 
   // Profile Form State
   const [name, setName] = useState(user?.name || "");
@@ -156,6 +208,20 @@ export default function Settings() {
             <span>Profile Details</span>
           </button>
 
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => setActiveTab('users')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-left ${
+                activeTab === 'users' 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25' 
+                  : 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/20'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span>User Roles (Admin)</span>
+            </button>
+          )}
+
           <button 
             onClick={() => setActiveTab('security')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-left ${
@@ -243,6 +309,120 @@ export default function Settings() {
         
         {/* Settings Tab Content */}
         <div className="md:col-span-9">
+          {/* USER ROLES TAB (ADMIN ONLY) */}
+          {activeTab === 'users' && user?.role === 'admin' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-2xl border border-indigo-200/60 dark:border-indigo-800">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">User Role Authorization</h2>
+                    <p className="text-xs text-slate-500">Manage user access privileges across Student, Faculty, and Admin roles</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={fetchUserProfiles}
+                  disabled={loadingUsers}
+                  className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all self-start sm:self-auto"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUsers ? 'animate-spin' : ''}`} />
+                  <span>Refresh List</span>
+                </button>
+              </div>
+
+              {/* Search filter */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search registered users by name or email..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* User List */}
+              <div className="space-y-3">
+                {loadingUsers ? (
+                  <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-indigo-500" />
+                    <span>Loading registered users from database...</span>
+                  </div>
+                ) : userProfiles.filter(u => 
+                    (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) || 
+                    (u.full_name || '').toLowerCase().includes(userSearch.toLowerCase())
+                  ).length === 0 ? (
+                  <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                    No users matching search query found.
+                  </div>
+                ) : (
+                  userProfiles
+                    .filter(u => 
+                      (u.email || '').toLowerCase().includes(userSearch.toLowerCase()) || 
+                      (u.full_name || '').toLowerCase().includes(userSearch.toLowerCase())
+                    )
+                    .map(usr => (
+                      <div 
+                        key={usr.id} 
+                        className="p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200/70 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:border-indigo-200 dark:hover:border-indigo-800"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img 
+                            src={usr.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'} 
+                            alt={usr.full_name || usr.email} 
+                            className="w-10 h-10 rounded-full object-cover border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {usr.full_name || usr.email?.split('@')[0]}
+                              </p>
+                              {usr.email?.toLowerCase() === 'nitesh933438@gmail.com' && (
+                                <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold rounded-full">
+                                  Primary Admin
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">{usr.email}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 self-end sm:self-auto flex-shrink-0">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-[11px] text-slate-400 font-medium hidden sm:inline">Role:</label>
+                            <select
+                              value={usr.role || 'student'}
+                              disabled={usr.email?.toLowerCase() === 'nitesh933438@gmail.com'}
+                              onChange={(e) => handleRoleChange(usr.id, usr.email, e.target.value as any)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                usr.role === 'admin' 
+                                  ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800' 
+                                  : usr.role === 'teacher' 
+                                  ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                              }`}
+                            >
+                              <option value="student">Student</option>
+                              <option value="teacher">Teacher (Faculty)</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* PROFILE TAB */}
           {activeTab === 'profile' && (
             <motion.div 

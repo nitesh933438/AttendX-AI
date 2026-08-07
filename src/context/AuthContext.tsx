@@ -35,6 +35,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUserData: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
+  updateUserRole: (userId: string, newRole: 'admin' | 'teacher' | 'student') => Promise<{ success: boolean; error?: string }>;
   createTeacher: (teacherData: { email: string; name: string; department?: string; employeeId?: string }) => Promise<{ success: boolean; teacher?: any; error?: string }>;
 }
 
@@ -56,12 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const emailLower = authUser.email?.toLowerCase() || '';
-      
-      // Determine Role Rule: nitesh933438@gmail.com is ALWAYS Admin
-      let determinedRole: 'admin' | 'teacher' | 'student' = 'student';
-      if (emailLower === 'nitesh933438@gmail.com') {
-        determinedRole = 'admin';
-      }
 
       // Query profiles table
       const { data: profile, error } = await supabase
@@ -80,15 +75,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const firstName = profile?.first_name || metadata.first_name || fullName.split(' ')[0] || 'User';
       const lastName = profile?.last_name || metadata.last_name || fullName.split(' ').slice(1).join(' ') || '';
       
-      let role: 'admin' | 'teacher' | 'student' = determinedRole;
-      if (emailLower !== 'nitesh933438@gmail.com') {
-        if (profile?.role) {
-          role = profile.role as 'admin' | 'teacher' | 'student';
-        } else if (metadata.role === 'teacher') {
-          role = 'teacher';
-        } else {
-          role = 'student';
-        }
+      // Determine Role:
+      // 1. Primary admin account is always assigned 'admin'
+      // 2. If profile exists in DB, keep its assigned role (allows Admins to promote/demote users)
+      // 3. Otherwise default new users to 'student' (or metadata role if explicitly provided)
+      let role: 'admin' | 'teacher' | 'student' = 'student';
+      if (emailLower === 'nitesh933438@gmail.com') {
+        role = 'admin';
+      } else if (profile?.role) {
+        role = profile.role as 'admin' | 'teacher' | 'student';
+      } else if (metadata.role === 'teacher' || metadata.role === 'admin') {
+        role = metadata.role as 'admin' | 'teacher' | 'student';
+      } else {
+        role = 'student';
       }
 
       const mappedUser: User = {
@@ -118,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }).then(({ error: upsertErr }) => {
           if (upsertErr) console.warn("Notice upserting user profile:", upsertErr.message);
         });
+      } else if (profile && profile.role !== role && emailLower === 'nitesh933438@gmail.com') {
+        supabase.from('profiles').update({ role: 'admin' }).eq('id', authUser.id).then(() => {});
       }
 
       setUser(mappedUser);
@@ -459,6 +460,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   /**
+   * Admin-only Update User Role
+   */
+  const updateUserRole = async (userId: string, newRole: 'admin' | 'teacher' | 'student'): Promise<{ success: boolean; error?: string }> => {
+    if (!user || user.role !== 'admin') {
+      return { success: false, error: 'Permission denied: Only Admins can modify user roles.' };
+    }
+
+    try {
+      // 1. Update in Supabase profiles
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+
+      if (error) {
+        console.error("Supabase role update error:", error.message);
+        // Fallback to server API endpoint
+        await apiClient.put(`/api/admin/users/${userId}/role`, { role: newRole });
+      }
+
+      if (user.id === userId) {
+        await refreshUserData();
+      }
+
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to update user role' };
+    }
+  };
+
+  /**
    * Admin-only Teacher Creation
    */
   const createTeacher = async (teacherData: { email: string; name: string; department?: string; employeeId?: string }): Promise<{ success: boolean; teacher?: any; error?: string }> => {
@@ -488,6 +520,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       refreshUserData,
       updateProfile,
+      updateUserRole,
       createTeacher
     }}>
       {children}
