@@ -12,6 +12,8 @@ export default function AuthCallback() {
 
   useEffect(() => {
     let mounted = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let timer: any = null;
 
     async function handleAuthCallback() {
       try {
@@ -73,27 +75,25 @@ export default function AuthCallback() {
         }
 
         // 3. Listener fallback for async auth state update
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+        const authRes = supabase.auth.onAuthStateChange(async (event, currentSession) => {
           if (currentSession && mounted) {
             if (currentSession.access_token) {
               localStorage.setItem('attendx_jwt_token', currentSession.access_token);
             }
             await refreshUserData();
-            navigate('/dashboard', { replace: true });
+            if (mounted) {
+              navigate('/dashboard', { replace: true });
+            }
           }
         });
+        subscription = authRes.data.subscription;
 
         // Timeout fallback if no session within 7 seconds
-        const timer = setTimeout(() => {
-          if (mounted && !session) {
+        timer = setTimeout(() => {
+          if (mounted) {
             setErrorMsg("Authentication process timed out. Please verify your Supabase OAuth settings and try again.");
           }
         }, 7000);
-
-        return () => {
-          subscription.unsubscribe();
-          clearTimeout(timer);
-        };
       } catch (err: any) {
         if (mounted) setErrorMsg(err?.message || "An unexpected error occurred during Google authentication.");
       }
@@ -103,6 +103,8 @@ export default function AuthCallback() {
 
     return () => {
       mounted = false;
+      if (subscription) subscription.unsubscribe();
+      if (timer) clearTimeout(timer);
     };
   }, [navigate, refreshUserData]);
 
